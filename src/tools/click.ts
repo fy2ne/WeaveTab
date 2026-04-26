@@ -35,12 +35,33 @@ export async function weaveClick(
     throw new Error(`✗ Weave failed: Element "${elementId}" has no backend node ID`);
   }
 
-  const { object } = await session.DOM.resolveNode({ backendNodeId: element.backendNodeId });
-  await session.Runtime.callFunctionOn({
-    functionDeclaration: `function() { this.scrollIntoView({block:'center'}); this.click(); }`,
-    objectId: object.objectId,
-    silent: true,
-  });
+  await session.DOM.getDocument({});
+  const { nodeIds } = await session.DOM.pushNodesByBackendIdsToFrontend({ backendNodeIds: [element.backendNodeId] });
+  if (!nodeIds || nodeIds.length === 0) {
+     throw new Error(`✗ Weave failed: Could not resolve DOM node for "${elementId}"`);
+  }
+  const nodeId = nodeIds[0]!;
+
+  let boxModel;
+  try {
+    boxModel = (await session.DOM.getBoxModel({ nodeId })).model;
+  } catch {
+    const { object } = await session.DOM.resolveNode({ nodeId });
+    await session.Runtime.callFunctionOn({
+      functionDeclaration: `function() { this.scrollIntoView({behavior: 'instant', block: 'center'}); }`,
+      objectId: object.objectId,
+      silent: true,
+    });
+    boxModel = (await session.DOM.getBoxModel({ nodeId })).model;
+  }
+
+  const quad = boxModel.content;
+  const x = quad[0]! + (quad[2]! - quad[0]!) / 2;
+  const y = quad[1]! + (quad[5]! - quad[1]!) / 2;
+
+  await session.Input.dispatchMouseEvent({ type: "mouseMoved", x, y, button: "none" });
+  await session.Input.dispatchMouseEvent({ type: "mousePressed", x, y, button: "left", clickCount: 1 });
+  await session.Input.dispatchMouseEvent({ type: "mouseReleased", x, y, button: "left", clickCount: 1 });
 
   logAction("weave_click", elementId, element.label);
   process.stderr.write(`✓ Weaved: clicked ${element.label}\n`);

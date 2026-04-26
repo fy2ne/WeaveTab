@@ -1,5 +1,6 @@
 import CDP from "chrome-remote-interface";
 import type { Config } from "../config/loader.js";
+import { blockStorageAccess } from "../security/guard.js";
 
 export interface ChromeClient {
   session: CDP.Client;
@@ -14,27 +15,36 @@ async function detectNonLocalhostBinding(): Promise<void> {
   // This function is a checkpoint for future host config changes.
 }
 
-export async function connectToChrome(_config: Config): Promise<ChromeClient> {
+let activeClient: ChromeClient | null = null;
+
+export async function getOrConnect(config: Config): Promise<ChromeClient> {
   await detectNonLocalhostBinding();
+
+  // If we already have a connection, verify it is still alive
+  if (activeClient) {
+    try {
+      await activeClient.session.Browser.getVersion();
+      return activeClient;
+    } catch {
+      // Connection died, clear it and reconnect
+      activeClient = null;
+    }
+  }
 
   let targets: CDP.Target[];
 
   try {
     targets = await CDP.List({ host: "127.0.0.1", port: 9222 });
   } catch {
-    process.stderr.write(
-      "✗ Weave failed: Chrome not found on port 9222. Launch Chrome with --remote-debugging-port=9222\n"
+    throw new Error(
+      "Chrome not found on port 9222. Launch Chrome with --remote-debugging-port=9222"
     );
-    process.exit(1);
   }
 
   const pageTarget = targets.find((t) => t.type === "page" && t.url !== "about:blank");
 
   if (!pageTarget) {
-    process.stderr.write(
-      "✗ Weave failed: No active page tab found. Open a page in Chrome first.\n"
-    );
-    process.exit(1);
+    throw new Error("No active page tab found. Open a page in Chrome first.");
   }
 
   const session = await CDP({ host: "127.0.0.1", port: 9222, target: pageTarget.id });
@@ -44,14 +54,18 @@ export async function connectToChrome(_config: Config): Promise<ChromeClient> {
   await session.Page.enable();
   await session.Runtime.enable();
 
+  await blockStorageAccess(session);
+
   process.stderr.write("✓ Weaved. Ready.\n");
 
-  return {
+  activeClient = {
     session,
     targetId: pageTarget.id,
     url: pageTarget.url,
     title: pageTarget.title,
   };
+
+  return activeClient;
 }
 
 export async function getTabList(): Promise<CDP.Target[]> {
@@ -59,8 +73,7 @@ export async function getTabList(): Promise<CDP.Target[]> {
     const targets = await CDP.List({ host: "127.0.0.1", port: 9222 });
     return targets.filter((t) => t.type === "page");
   } catch {
-    process.stderr.write("✗ Weave failed: Cannot reach Chrome on port 9222.\n");
-    process.exit(1);
+    throw new Error("✗ Weave failed: Cannot reach Chrome on port 9222.");
   }
 }
 

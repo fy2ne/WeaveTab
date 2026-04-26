@@ -127,3 +127,28 @@ Clean tarball verified with `npm pack` (20 kB, only dist/ README.md package.json
 
 ### Next
 Project WeaveTab V1 is fully complete and shipped.
+
+---
+
+## 2026-04-26 — Phase 7: Bug Fixes + Physical Mouse Input
+
+### What was built
+Implemented all Phase 7 requirements:
+1. `logger.ts` — Made crash-safe by wrapping `mkdirSync` and `appendFileSync` in a try-catch block.
+2. `connector.ts` — Made connection lazy (`getOrConnect(config)`) to survive Chrome restarts, replaced `process.exit(1)` with standard `Error` throws.
+3. `walker.ts` — Added fallback label resolution for input roles (`name` -> `description` -> `value` -> `[role]`).
+4. `key.ts` — Implemented new `weave_key` tool to dispatch keyboard events (with special `\r` handling for Enter).
+5. `click.ts` — Completely rewrote to use coordinate-based clicking (`getBoxModel`) rather than JS injection, falling back to `scrollIntoView` if the element is off-screen.
+6. `server.ts` — Updated to use lazy connection fetching, wired up `weave_key`, and added detailed startup warnings for safeMode empty allowlist.
+
+### Files changed
+- `src/cdp/connector.ts` — Refactored to `getOrConnect` and removed hard exits.
+- `src/cdp/walker.ts` — Fallback logic and fixed `AXNode` typing.
+- `src/audit/logger.ts` — Added crash safety try/catch block.
+- `src/tools/key.ts` — Created new tool for keyboard events.
+- `src/tools/click.ts` — Rewritten for physical coordinates.
+- `src/server.ts` — Switched to lazy connection fetching on each tool run and registered `weave_key`.
+- `package.json` — Bumped version to `1.1.0`.
+
+### Status
+✓ Complete

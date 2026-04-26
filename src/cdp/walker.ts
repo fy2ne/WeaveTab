@@ -21,6 +21,7 @@ type AXNode = {
   ignored?: boolean;
   role?: { value: string };
   name?: { value: string };
+  description?: { value: string };
   value?: { value: string };
   backendDOMNodeId?: number;
   children?: AXNode[];
@@ -69,16 +70,22 @@ function collectNodes(nodes: AXNode[], out: ActionElement[], counter: { n: numbe
     if (node.ignored) continue;
 
     const role = node.role?.value ?? "";
-    const label = node.name?.value ?? "";
+    const name = node.name?.value ?? "";
+    const description = node.description?.value ?? "";
     const value = node.value?.value;
 
-    if (INTERACTIVE_ROLES.has(role) && label.trim().length > 0) {
+    const alwaysInclude = ["searchbox", "combobox", "textbox", "textarea", "button", "link"];
+    const hasLabel = name.trim().length > 0;
+
+    if (INTERACTIVE_ROLES.has(role) && (hasLabel || alwaysInclude.includes(role))) {
+      const finalLabel = name.trim() ? name : (description.trim() ? description : (value?.trim() ? value : `[${role}]`));
+      
       counter.n += 1;
       const id = `${prefixFor(role)}-${counter.n}`;
       const element: ActionElement = {
         id,
         role,
-        label,
+        label: finalLabel,
         backendNodeId: node.backendDOMNodeId,
       };
       if (value !== undefined) element.value = value;

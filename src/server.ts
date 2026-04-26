@@ -1,8 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { connectToChrome } from "./cdp/connector.js";
-import { blockStorageAccess } from "./security/guard.js";
+import { getOrConnect } from "./cdp/connector.js";
 import { checkRateLimit } from "./security/ratelimit.js";
 import { logAction } from "./audit/logger.js";
 import type { Config } from "./config/loader.js";
@@ -14,6 +13,7 @@ import { weaveExtract } from "./tools/extract.js";
 import { weaveTabs } from "./tools/tabs.js";
 import { weaveScroll } from "./tools/scroll.js";
 import { weaveScreenshot } from "./tools/screenshot.js";
+import { weaveKey } from "./tools/key.js";
 
 type ToolHandler<T> = () => Promise<T>;
 
@@ -28,7 +28,7 @@ function withSecurity<T>(config: Config, handler: ToolHandler<T>): Promise<T> {
 }
 
 function isMutatingTool(name: string): boolean {
-  return ["weave_navigate", "weave_click", "weave_type", "weave_scroll"].includes(name);
+  return ["weave_navigate", "weave_click", "weave_type", "weave_scroll", "weave_key"].includes(name);
 }
 
 function assertSafeModeAllows(toolName: string, config: Config): void {
@@ -49,17 +49,19 @@ function wrapError(err: unknown): { content: [{ type: "text"; text: string }]; i
 }
 
 export async function startServer(config: Config): Promise<void> {
-  const { session } = await connectToChrome(config);
-  await blockStorageAccess(session);
+  if (config.safeMode && config.allow.length === 0) {
+    process.stderr.write("⚠ Weave warning: safeMode is enabled but allow list is empty. Mutating tools are blocked.\n");
+  }
 
   const server = new McpServer({
     name: "weavetab",
-    version: "1.0.0",
+    version: "1.1.0",
   });
 
   server.tool("weave_read", "Read the current page as a semantic action map.", {}, async () => {
     try {
       return await withSecurity(config, async () => {
+        const { session } = await getOrConnect(config);
         const result = await weaveRead(session);
         return { content: [{ type: "text", text: result }] };
       });
@@ -76,6 +78,7 @@ export async function startServer(config: Config): Promise<void> {
       try {
         assertSafeModeAllows("weave_navigate", config);
         return await withSecurity(config, async () => {
+          const { session } = await getOrConnect(config);
           const result = await weaveNavigate(session, url, config);
           return { content: [{ type: "text", text: JSON.stringify(result) }] };
         });
@@ -93,6 +96,7 @@ export async function startServer(config: Config): Promise<void> {
       try {
         assertSafeModeAllows("weave_click", config);
         return await withSecurity(config, async () => {
+          const { session } = await getOrConnect(config);
           const result = await weaveClick(session, id, config);
           return { content: [{ type: "text", text: JSON.stringify(result) }] };
         });
@@ -114,7 +118,29 @@ export async function startServer(config: Config): Promise<void> {
       try {
         assertSafeModeAllows("weave_type", config);
         return await withSecurity(config, async () => {
+          const { session } = await getOrConnect(config);
           const result = await weaveType(session, id, text, clearFirst ?? false, config);
+          return { content: [{ type: "text", text: JSON.stringify(result) }] };
+        });
+      } catch (e) {
+        return wrapError(e);
+      }
+    }
+  );
+
+  server.tool(
+    "weave_key",
+    "Dispatch a keyboard event (e.g. Enter, Escape, ArrowUp).",
+    {
+      key: z.string().describe("Key to press (e.g. 'Enter', 'Escape', 'a')"),
+      modifiers: z.array(z.enum(["Alt", "Ctrl", "Meta", "Shift"])).optional().describe("Optional modifier keys"),
+    },
+    async ({ key, modifiers }) => {
+      try {
+        assertSafeModeAllows("weave_key", config);
+        return await withSecurity(config, async () => {
+          const { session } = await getOrConnect(config);
+          const result = await weaveKey(session, key, modifiers, config);
           return { content: [{ type: "text", text: JSON.stringify(result) }] };
         });
       } catch (e) {
@@ -133,6 +159,7 @@ export async function startServer(config: Config): Promise<void> {
     async ({ selector, format }) => {
       try {
         return await withSecurity(config, async () => {
+          const { session } = await getOrConnect(config);
           const result = await weaveExtract(session, selector, format);
           return { content: [{ type: "text", text: JSON.stringify(result) }] };
         });
@@ -178,6 +205,7 @@ export async function startServer(config: Config): Promise<void> {
       try {
         assertSafeModeAllows("weave_scroll", config);
         return await withSecurity(config, async () => {
+          const { session } = await getOrConnect(config);
           const result = await weaveScroll(session, direction, amount ?? 500, config);
           return { content: [{ type: "text", text: JSON.stringify(result) }] };
         });
@@ -190,6 +218,7 @@ export async function startServer(config: Config): Promise<void> {
   server.tool("weave_screenshot", "Capture a PNG screenshot of the current tab.", {}, async () => {
     try {
       return await withSecurity(config, async () => {
+        const { session } = await getOrConnect(config);
         const result = await weaveScreenshot(session, config);
         return {
           content: [
