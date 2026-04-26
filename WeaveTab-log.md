@@ -15,6 +15,31 @@ Created `package.json` with all required fields (`@fy2ne/weavetab`, `bin`, `type
 ### Status
 ✓ Complete
 
+---
+
+## 2026-04-26 — Phase 8: Semantic Context Engine + Universal Site Intelligence
+
+### What was built
+href-first element resolution, site intelligence profiles for YouTube/GitHub/Google/Gmail,
+action trail with page-change detection, grouped weave_read with plain English hints,
+and weave_find intent-based element search. Tested with full GitHub fork workflow.
+
+### Files changed
+- src/intelligence/profiles.ts — new: site profiles for 4 sites + generic
+- src/intelligence/trail.ts — new: action memory with page-change detection
+- src/intelligence/hints.ts — new: plain English hint generator per page type
+- src/cdp/walker.ts — href extraction via DOM.getAttributes, hrefType classifier
+- src/tools/read.ts — grouped response format, last_action, hints included
+- src/tools/find.ts — new: weave_find intent-based element search
+- src/tools/click.ts — trail recording after every click
+- src/server.ts — weave_find registered
+
+### Status
+✓ Complete
+
+### Next
+Bump to 1.3.0, publish to npm, push to GitHub, update README with new tools and response format.
+
 ### Next
 Phase 1 — CDP Connector + DOM Walker
 
@@ -126,7 +151,35 @@ Clean tarball verified with `npm pack` (20 kB, only dist/ README.md package.json
 ✓ Complete
 
 ### Next
-Project WeaveTab V1 is fully complete and shipped.
+Phase 7 — Bug Fixes + Physical Mouse Input
+
+---
+
+## 2026-04-26 — Phase 7: Bug Fixes + Physical Mouse Input
+
+### What was built
+Fixed 5 critical bugs discovered during production testing.
+1. **Lazy Connection**: `connector.ts` now uses `getOrConnect()` which handles reconnections and pings, preventing "EOF" crashes in the IDE.
+2. **Input Fallbacks**: `walker.ts` now correctly maps inputs (like YouTube search) even if they have blank labels, using placeholders like `[searchbox]`.
+3. **Physical Clicks**: `click.ts` completely rewritten to use coordinate-based simulation (`Input.dispatchMouseEvent`) instead of JS injection.
+4. **New Tool**: `weave_key` allows sending physical keyboard events (Enter, Escape, etc.).
+5. **Crash-Safe Logger**: `logger.ts` now uses try-catch and self-heals its directory.
+6. **User Guidance**: `server.ts` now provides actionable error messages for `safeMode` blocks.
+
+### Files changed
+- `src/cdp/connector.ts`
+- `src/cdp/walker.ts`
+- `src/audit/logger.ts`
+- `src/tools/click.ts`
+- `src/tools/key.ts`
+- `src/server.ts`
+- `package.json`
+
+### Status
+✓ Complete
+
+### Next
+V1.2.1 Shipped. Ready for autonomous browser operations.
 
 ---
 

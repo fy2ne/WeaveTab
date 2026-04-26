@@ -1,6 +1,6 @@
 {
   "name": "@fy2ne/weavetab",
-  "version": "1.1.0",
+  "version": "1.2.1",
   "description": "Local MCP server that attaches to Chrome via CDP and exposes semantic browser control to any AI agent. No extensions. No cloud. Zero screenshots by default.",
   "author": "fy2ne",
   "license": "MIT",

@@ -2,6 +2,7 @@ import CDP from "chrome-remote-interface";
 import { buildActionMap } from "../cdp/walker.js";
 import { checkDomain } from "../security/allowlist.js";
 import { logAction } from "../audit/logger.js";
+import { memory } from "../state/memory.js";
 import type { Config } from "../config/loader.js";
 
 interface TypeResult {
@@ -57,6 +58,14 @@ export async function weaveType(
   // Audit log ALWAYS writes [REDACTED] — never the actual text
   logAction("weave_type", elementId, "[REDACTED]");
   process.stderr.write(`✓ Weaved: typed into ${element.label}\n`);
+
+  memory.recordAction({
+    tool: "weave_type",
+    targetId: elementId,
+    targetLabel: element.label,
+    targetUrl: currentUrl,
+    textTyped: "[REDACTED]"
+  });
 
   return { success: true };
 }

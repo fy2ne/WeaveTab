@@ -1,6 +1,7 @@
 import CDP from "chrome-remote-interface";
 import { checkDomain } from "../security/allowlist.js";
 import { logAction } from "../audit/logger.js";
+import { memory } from "../state/memory.js";
 import type { Config } from "../config/loader.js";
 
 interface NavigateResult {
@@ -32,6 +33,11 @@ export async function weaveNavigate(
 
   logAction("weave_nav", url, `arrived at ${title}`);
   process.stderr.write(`✓ Weaved: arrived at ${title}\n`);
+
+  memory.recordAction({
+    tool: "weave_navigate",
+    targetUrl: parsed.href
+  });
 
   return { success: true, url: parsed.href, title };
 }

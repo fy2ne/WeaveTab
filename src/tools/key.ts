@@ -1,5 +1,6 @@
 import CDP from "chrome-remote-interface";
 import { logAction } from "../audit/logger.js";
+import { memory } from "../state/memory.js";
 import type { Config } from "../config/loader.js";
 
 const ALLOWED_KEYS = new Set([
@@ -57,6 +58,14 @@ export async function weaveKey(
 
   logAction("weave_key", key, "dispatched");
   process.stderr.write(`✓ Weaved: key dispatched\n`);
+
+  const { frameTree } = await session.Page.getFrameTree();
+
+  memory.recordAction({
+    tool: "weave_key",
+    keyDispatched: key,
+    targetUrl: frameTree.frame.url
+  });
 
   return { success: true };
 }
