@@ -5,17 +5,23 @@ import { logAction } from "../audit/logger.js";
 import { recordAction } from "../intelligence/trail.js";
 import { getProfile } from "../intelligence/profiles.js";
 import type { Config } from "../config/loader.js";
+import { logProfessional } from "../ui/cli.js";
+import { TelemetryCapture, TelemetryReport } from "../sensors/network.js";
+import { watchMutations, MutationSummary } from "../sensors/mutations.js";
 
 interface ClickResult {
   success: true;
   clicked: string;
+  telemetry: TelemetryReport;
+  mutations: MutationSummary;
 }
 
 export async function weaveClick(
   session: CDP.Client,
-  elementId: string,
+  args: { id?: string; label?: string; intent?: string; backendNodeId?: number },
   config: Config
 ): Promise<ClickResult> {
+  const { id, label, intent, backendNodeId } = args;
   const { frameTree: beforeTree } = await session.Page.getFrameTree();
   const urlBefore = beforeTree.frame.url;
   const pageTypeBefore = getPageType(urlBefore);
@@ -25,23 +31,40 @@ export async function weaveClick(
     throw new Error(`⊘ Weave blocked: ${domainCheck.reason}`);
   }
 
-  const map = await buildActionMap(session);
-  const element = map.elements.find((el) => el.id === elementId);
+  let element: any;
 
-  if (!element) {
-    throw new Error(`⊘ Weave blocked: Element ID "${elementId}" not found in current action map`);
+  if (backendNodeId) {
+    element = { backendNodeId, label: `node-${backendNodeId}`, id: `node-${backendNodeId}` };
+  } else if (id) {
+    const map = await buildActionMap(session);
+    element = map.elements.find((el) => el.id === id);
+    if (!element) throw new Error(`⊘ Weave blocked: ID "${id}" not found`);
+  } else if (label || intent) {
+    const map = await buildActionMap(session);
+    const target = label || intent!;
+    element = map.elements.find(el => el.label.toLowerCase() === target.toLowerCase()) 
+              || map.elements.find(el => el.type === target)
+              || map.elements.find(el => el.label.toLowerCase().includes(target.toLowerCase()));
+    
+    if (!element) throw new Error(`⊘ Weave blocked: Could not find clickable element matching "${target}"`);
+  } else {
+    throw new Error("✗ Weave failed: Must provide elementId, label, intent, or backendNodeId");
   }
 
-  process.stderr.write(`⟳ Weaving: clicking ${element.label}\n`);
+  logProfessional("ACTION", "Weaver", `clicking ${element.label}`);
+  await (await import("../ui/cli.js")).logWeaving(`Moving mouse to ${element.label}...`, 400);
+
+  const telemetry = new TelemetryCapture(session);
+  await telemetry.start();
 
   if (!element.backendNodeId) {
-    throw new Error(`✗ Weave failed: Element "${elementId}" has no backend node ID`);
+    throw new Error(`✗ Weave failed: Element "${element.id}" has no backend node ID`);
   }
 
   await session.DOM.getDocument({});
   const { nodeIds } = await session.DOM.pushNodesByBackendIdsToFrontend({ backendNodeIds: [element.backendNodeId] });
   if (!nodeIds || nodeIds.length === 0) {
-     throw new Error(`✗ Weave failed: Could not resolve DOM node for "${elementId}"`);
+     throw new Error(`✗ Weave failed: Could not resolve DOM node for "${element.id}"`);
   }
   const nodeId = nodeIds[0]!;
 
@@ -63,36 +86,26 @@ export async function weaveClick(
   const y = quad[1]! + (quad[5]! - quad[1]!) / 2;
 
   await session.Runtime.evaluate({
-    expression: `
-      (() => {
-        let cursor = document.getElementById('weave-cursor');
-        if (!cursor) {
-          cursor = document.createElement('div');
-          cursor.id = 'weave-cursor';
-          cursor.style.position = 'fixed';
-          cursor.style.width = '20px';
-          cursor.style.height = '20px';
-          cursor.style.borderRadius = '50%';
-          cursor.style.backgroundColor = 'rgba(255, 0, 0, 0.4)';
-          cursor.style.border = '2px solid red';
-          cursor.style.pointerEvents = 'none';
-          cursor.style.zIndex = '2147483647';
-          cursor.style.transition = 'all 0.3s ease-out';
-          cursor.style.transform = 'translate(-50%, -50%)';
-          document.body.appendChild(cursor);
-        }
-        cursor.style.left = '${x}px';
-        cursor.style.top = '${y}px';
-      })();
-    `
+    expression: `if(window.__weavetab) window.__weavetab.moveCursor(${x}, ${y}, 'Clicking ${element.label.replace(/'/g, "\\'")}');`
   });
 
   await new Promise(r => setTimeout(r, 300));
   await session.Input.dispatchMouseEvent({ type: "mouseMoved", x, y, button: "none" });
+  await (await import("../ui/cli.js")).logWeaving(`Clicking ${element.label}...`, 200);
+  
+  await session.Runtime.evaluate({
+    expression: `if(window.__weavetab) window.__weavetab.clickCursor();`
+  });
+  
   await session.Input.dispatchMouseEvent({ type: "mousePressed", x, y, button: "left", clickCount: 1 });
   await session.Input.dispatchMouseEvent({ type: "mouseReleased", x, y, button: "left", clickCount: 1 });
 
-  await new Promise(r => setTimeout(r, 800));
+  await session.Runtime.evaluate({
+    expression: `if(window.__weavetab) window.__weavetab.hideBadge();`
+  });
+
+  const mutations = await watchMutations(session, 1000);
+  const telemetryReport = await telemetry.stop();
   
   const { frameTree: afterTree } = await session.Page.getFrameTree();
   const urlAfter = afterTree.frame.url;
@@ -101,7 +114,7 @@ export async function weaveClick(
   recordAction({
     timestamp: new Date().toISOString(),
     tool: "weave_click",
-    input: { elementId },
+    input: { elementId: element.id },
     result: {
       success: true,
       pageChanged: urlBefore !== urlAfter,
@@ -118,10 +131,9 @@ export async function weaveClick(
     }
   });
 
-  logAction("weave_click", elementId, element.label);
-  process.stderr.write(`✓ Weaved: clicked ${element.label}\n`);
+  logProfessional("INFO", "Weaver", `✓ Weaved: clicked ${element.label}`);
 
-  return { success: true, clicked: element.label };
+  return { success: true, clicked: element.label, telemetry: telemetryReport, mutations };
 }
 
 function getPageType(url: string): string {

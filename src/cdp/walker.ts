@@ -23,6 +23,14 @@ export interface ActionMap {
   url: string;
   title: string;
   elements: ActionElement[];
+  pageType?: string;
+}
+
+export interface WalkerOptions {
+  scope?: ActionElement["group"];
+  query?: string;
+  limit?: number;
+  lite?: boolean;
 }
 
 type AXNode = {
@@ -152,9 +160,43 @@ function collectNodes(
   }
 }
 
-export async function buildActionMap(session: CDP.Client): Promise<ActionMap> {
+/**
+ * Finds the best matching element for a semantic intent.
+ */
+export function findBestMatch(elements: ActionElement[], intent: string): ActionElement | null {
+  const query = intent.toLowerCase();
+  
+  // 1. Exact label match (case insensitive)
+  const exactMatch = elements.find(el => el.label.toLowerCase() === query);
+  if (exactMatch) return exactMatch;
+
+  // 2. Semantic type match (if intent is like "SEARCH_BAR")
+  const typeMatch = elements.find(el => el.type === intent);
+  if (typeMatch) return typeMatch;
+
+  // 3. Includes match
+  const includesMatch = elements.find(el => el.label.toLowerCase().includes(query));
+  if (includesMatch) return includesMatch;
+
+  // 4. Role + Label match (e.g. "click search button")
+  if (query.includes(" ")) {
+    const parts = query.split(" ");
+    const rolePart = parts[parts.length - 1]; // "button"
+    const labelPart = parts.slice(0, -1).join(" "); // "search"
+    
+    const roleMatch = elements.find(el => 
+      el.role.includes(rolePart) && el.label.toLowerCase().includes(labelPart)
+    );
+    if (roleMatch) return roleMatch;
+  }
+
+  return null;
+}
+
+export async function buildActionMap(session: CDP.Client, options: WalkerOptions = {}): Promise<ActionMap> {
   const [axResponse, { frameTree }] = await Promise.all([
-    session.Accessibility.getFullAXTree({}),
+    // @ts-ignore: CDP types might not be perfectly up to date, but pierce exists in protocol
+    session.Accessibility.getFullAXTree({ pierce: true }),
     session.Page.getFrameTree(),
   ]);
 
@@ -169,9 +211,24 @@ export async function buildActionMap(session: CDP.Client): Promise<ActionMap> {
   const counter = { n: 0 };
   collectNodes(axNodes, rawElements, counter, "other");
 
-  const elements = filterHidden(rawElements as ActionElement[]);
+  let elements = filterHidden(rawElements as ActionElement[]);
 
-  // Href-first resolution via CDP
+  // Apply scope filter
+  if (options.scope) {
+    elements = elements.filter(el => el.group === options.scope);
+  }
+
+  // Apply query filter (for lite mode/search)
+  if (options.query) {
+    const q = options.query.toLowerCase();
+    elements = elements.filter(el => 
+      el.label.toLowerCase().includes(q) || 
+      el.type?.toLowerCase().includes(q) ||
+      el.role.toLowerCase().includes(q)
+    );
+  }
+
+  // Href-first resolution via CDP (only for visible elements to save time)
   const validElements = elements.filter(e => e.backendNodeId !== undefined);
   const backendIds = validElements.map(e => e.backendNodeId!);
 
@@ -195,27 +252,21 @@ export async function buildActionMap(session: CDP.Client): Promise<ActionMap> {
             el.hrefType = determineHrefType(el.href, url);
           }
           if (attrMap.type) {
-            // we override HTML type for some logic
             (el as any).htmlType = attrMap.type;
-          }
-          if (attrMap.action) {
-            if (attrMap.action.includes("fork")) {
-              el.hrefType = "fork";
-            }
           }
         } catch (e) {}
       });
 
       await Promise.all(attrPromises);
-    } catch (err) {
-      // ignore
-    }
+    } catch (err) {}
   }
 
   // Site intelligence profile classification
+  let pageType = "unknown";
   try {
     const hostname = new URL(url).hostname;
     const profile = getProfile(hostname);
+    pageType = profile.getPageType(url);
     
     for (const el of elements) {
       el.type = classifyElement(el, profile, url);
@@ -227,5 +278,23 @@ export async function buildActionMap(session: CDP.Client): Promise<ActionMap> {
     }
   }
 
-  return { url, title, elements: elements as ActionElement[] };
+  // Final limit
+  if (options.limit && elements.length > options.limit) {
+    elements = elements.slice(0, options.limit);
+  }
+
+  // Lite mode reduction (Token Saver)
+  if (options.lite) {
+    elements = elements.map(el => ({
+      id: el.id,
+      role: el.role,
+      label: el.label,
+      type: el.type,
+      group: el.group,
+      href: el.hrefType === "video" || el.hrefType === "repo" ? el.href : undefined,
+      value: el.value,
+    } as ActionElement));
+  }
+
+  return { url, title, elements: elements as ActionElement[], pageType };
 }

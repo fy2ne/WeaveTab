@@ -15,7 +15,7 @@ export async function youtubeDemo(session: CDP.Client, config: Config) {
   if (!firstVideo.found || !firstVideo.element) {
     throw new Error("Could not locate first video result on YouTube search results");
   }
-  await weaveClick(session, firstVideo.element.id, config);
+  await weaveClick(session, { id: firstVideo.element.id }, config);
 
   // 3) Ensure we are on the video page
   await weaveRead(session);
@@ -23,13 +23,13 @@ export async function youtubeDemo(session: CDP.Client, config: Config) {
   // 4) Try to open quality settings (Settings button)
   const settings = await weaveFind(session, "settings button");
   if (settings.found && settings.element) {
-    await weaveClick(session, settings.element.id, config);
+    await weaveClick(session, { id: settings.element.id }, config);
   }
 
   // 5) Try to select 144p quality if available
   const quality144 = await weaveFind(session, "144p");
   if (quality144.found && quality144.element) {
-    await weaveClick(session, quality144.element.id, config);
+    await weaveClick(session, { id: quality144.element.id }, config);
   }
 
   return { ok: true };

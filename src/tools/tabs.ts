@@ -22,11 +22,11 @@ export async function weaveTabs(
   _tabId: undefined
 ): Promise<ListResult>;
 export async function weaveTabs(
-  action: "switch",
+  action: "switch" | "close",
   tabId: string
 ): Promise<SwitchResult>;
 export async function weaveTabs(
-  action: "list" | "switch",
+  action: "list" | "switch" | "close",
   tabId: string | undefined
 ): Promise<ListResult | SwitchResult> {
   if (action === "list") {
@@ -44,11 +44,18 @@ export async function weaveTabs(
   }
 
   if (!tabId) {
-    throw new Error("✗ Weave failed: tabId is required for switch action");
+    throw new Error(`✗ Weave failed: tabId is required for ${action} action`);
+  }
+
+  if (action === "close") {
+    process.stderr.write(`⟳ Weaving: closing tab ${tabId}\n`);
+    await CDP.Close({ host: "127.0.0.1", port: 9222, id: tabId });
+    logAction("weave_tabs", `close:${tabId}`, "Closed");
+    process.stderr.write(`✓ Weaved: closed tab ${tabId}\n`);
+    return { success: true, title: "Closed" };
   }
 
   process.stderr.write(`⟳ Weaving: switching to ${tabId}\n`);
-
   const session = await connectToTab(tabId);
   await session.Target.activateTarget({ targetId: tabId });
 

@@ -3,10 +3,7 @@ import CDP from "chrome-remote-interface";
 export function assertNotRoot(): void {
   // process.getuid is Unix-only; on Windows it doesn't exist which is fine
   if (typeof process.getuid === "function" && process.getuid() === 0) {
-    process.stderr.write(
-      "✗ Weave failed: Running as root is not allowed. Start WeaveTab as a normal user.\n"
-    );
-    process.exit(1);
+    throw new Error("✗ Weave failed: Running as root is not allowed. Start WeaveTab as a normal user.");
   }
 }
 

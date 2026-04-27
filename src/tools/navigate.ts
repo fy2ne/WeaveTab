@@ -1,5 +1,6 @@
 import CDP from "chrome-remote-interface";
 import { checkDomain } from "../security/allowlist.js";
+import { logProfessional } from "../ui/cli.js";
 import { logAction } from "../audit/logger.js";
 import { memory } from "../state/memory.js";
 import type { Config } from "../config/loader.js";
@@ -23,16 +24,19 @@ export async function weaveNavigate(
     throw new Error(`⊘ Weave blocked: ${domainCheck.reason}`);
   }
 
-  process.stderr.write(`⟳ Weaving: navigating to ${url}\n`);
+  logProfessional("ACTION", "Weaver", `navigating to ${url}`);
 
   await session.Page.navigate({ url: parsed.href });
   await session.Page.loadEventFired();
+  
+  const { closePopups } = await import("../cdp/popups.js");
+  await closePopups(session);
 
   const { frameTree } = await session.Page.getFrameTree();
   const title = frameTree.frame.name ?? parsed.hostname;
 
   logAction("weave_nav", url, `arrived at ${title}`);
-  process.stderr.write(`✓ Weaved: arrived at ${title}\n`);
+  logProfessional("INFO", "Weaver", `✓ Weaved: arrived at ${title}`);
 
   memory.recordAction({
     tool: "weave_navigate",

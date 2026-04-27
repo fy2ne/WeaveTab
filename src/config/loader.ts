@@ -7,7 +7,11 @@ export interface Config {
   block: string[];
   safeMode: boolean;
   screenshot: boolean;
+  peek?: boolean;
   maxActionsPerMinute: number;
+  browserExecutablePath: string;
+  preferredBrowser?: string;
+  persistentProfile?: boolean;
 }
 
 const CONFIG_DIR = path.join(os.homedir(), ".weavetab");
@@ -19,6 +23,9 @@ const DEFAULTS: Config = {
   safeMode: true,
   screenshot: false,
   maxActionsPerMinute: 20,
+  browserExecutablePath: "",
+  preferredBrowser: "google-chrome",
+  persistentProfile: false,
 };
 
 function ensureConfigDir(): void {
@@ -53,9 +60,18 @@ export async function loadConfig(): Promise<Config> {
     block: Array.isArray(raw.block) ? raw.block : DEFAULTS.block,
     safeMode: typeof raw.safeMode === "boolean" ? raw.safeMode : DEFAULTS.safeMode,
     screenshot: typeof raw.screenshot === "boolean" ? raw.screenshot : DEFAULTS.screenshot,
+    peek: typeof raw.peek === "boolean" ? raw.peek : false,
     maxActionsPerMinute:
       typeof raw.maxActionsPerMinute === "number"
         ? raw.maxActionsPerMinute
         : DEFAULTS.maxActionsPerMinute,
+    browserExecutablePath: typeof raw.browserExecutablePath === "string" ? raw.browserExecutablePath : DEFAULTS.browserExecutablePath,
+    preferredBrowser: typeof raw.preferredBrowser === "string" ? raw.preferredBrowser : DEFAULTS.preferredBrowser,
+    persistentProfile: typeof raw.persistentProfile === "boolean" ? raw.persistentProfile : DEFAULTS.persistentProfile,
   };
+}
+
+export function saveConfig(config: Config): void {
+  ensureConfigDir();
+  fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), "utf-8");
 }

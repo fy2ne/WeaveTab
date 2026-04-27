@@ -1,33 +1,47 @@
-# WeaveTab
+# WeaveTab V2 — The "Ghost in the Machine"
 
-> A local MCP server that attaches to your running Chrome browser via CDP — no extensions, no cloud, no screenshots by default.
+> A local MCP server that acts as a sensory engine for your browser via CDP — no extensions, no cloud, and a fraction of the tokens.
 
 ---
 
-## The Problem
+## The Token Problem
 
-Every browser MCP tool out there either:
-- Requires a Chrome extension installed permanently
-- Takes a screenshot, encodes it as base64, and burns your entire context window on pixels
-- Spins up a fake Playwright session that breaks real site sessions (cookies gone, logged out)
-- Sends your browser activity to a remote server
+Every browser MCP tool out there relies on screenshots:
+- Takes a screenshot, encodes it as base64, and burns your entire context window on pixels.
+- Takes another screenshot to verify a click worked.
+- Spins up a fake Playwright session that breaks real site sessions (cookies gone, logged out).
 
-**WeaveTab does none of this.** It reads Chrome's accessibility tree — the same semantic map a screen reader uses — and gives your AI agent clean, structured data to act on. Tokens spent on meaning, not pixels.
+**WeaveTab V2 does none of this.** It lives inside the browser's nervous system. It reads Chrome's accessibility tree, listens to network traffic, watches DOM mutations, and feels the page. Tokens spent on meaning, not pixels.
+
+### Token Cost Comparison
+
+| Action | Antigravity | browser-use | WeaveTab V2 |
+|---|---|---|---|
+| Read a page | ~1200 tokens (screenshot) | ~800 tokens (screenshot) | ~120 tokens (semantic JSON) |
+| Click a button | ~1200 tokens (verify screenshot) | ~800 tokens | 0 extra tokens (telemetry) |
+| Fill a form | ~3600 tokens (3 screenshots) | ~2400 tokens | ~200 tokens |
+| Fork a GitHub repo | ~8000 tokens | ~6000 tokens | ~600 tokens |
+| **Full Vercel project setup** | **~40,000 tokens** | **~30,000 tokens** | **~3,000 tokens** |
 
 ---
 
 ## How WeaveTab Beats the Alternatives
 
-| Feature | WeaveTab | BrowserMCP | browser-use | Playwright MCP |
+| Feature | WeaveTab V2 | BrowserMCP | browser-use | Playwright MCP |
 |---|---|---|---|---|
 | No extension required | ✓ | ✗ | ✓ | ✓ |
 | No screenshots by default | ✓ | ✗ | ✗ | ✗ |
-| Keeps your real session/cookies | ✓ | ✓ | ✗ | ✗ |
+| Keeps your real session/cookies | ✓ (Dual-Track) | ✓ | ✗ | ✗ |
+| Network & DOM Telemetry | ✓ | ✗ | ✗ | ✗ |
 | Zero cloud / fully local | ✓ | ✗ | ✗ | ✗ |
-| Prompt injection defense | ✓ | ✗ | ✗ | ✗ |
-| Audit log on disk | ✓ | ✗ | ✗ | ✗ |
-| Rate limiting built-in | ✓ | ✗ | ✗ | ✗ |
-| TypeScript strict, no any | ✓ | – | – | – |
+| Real-time Visual Dashboard | ✓ | ✗ | ✗ | ✗ |
+
+---
+
+## The WeaveTab Dashboard
+
+WeaveTab V2 includes a built-in zero-dependency local dashboard served at `http://localhost:3141`. 
+It provides a real-time WebSocket stream of what the AI is doing, instant configuration updates, domain allow-listing, and one-click MCP configurations for Cursor, Claude Desktop, and Gemini.
 
 ---
 
@@ -132,11 +146,13 @@ WeaveTab stores its config at `~/.weavetab/config.json`. It is created automatic
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `allow` | `string[]` | `[]` | Glob patterns for allowed domains (e.g. `["*.github.com", "docs.*"]`). Empty = allow all (when `safeMode` is false) |
-| `block` | `string[]` | `[]` | Glob patterns for blocked domains. Block takes priority over allow. |
-| `safeMode` | `boolean` | `true` | When `true` and `allow` is empty: only read-only tools work (`weave_read`, `weave_tabs`, `weave_extract`) |
-| `screenshot` | `boolean` | `false` | Must be `true` to use `weave_screenshot` |
-| `maxActionsPerMinute` | `number` | `20` | Sliding window rate limit. Protects against runaway agents. |
+| `allow` | `string[]` | `[]` | Glob patterns for allowed domains |
+| `block` | `string[]` | `[]` | Glob patterns for blocked domains |
+| `safeMode` | `boolean` | `true` | Only read-only tools work if allow is empty |
+| `screenshot` | `boolean` | `false` | Enables full page screenshots |
+| `peek` | `boolean` | `false` | Enables 300x300 webp crops via `weave_peek` |
+| `persistentProfile` | `boolean` | `false` | Enables using your actual browser profile cookies |
+| `maxActionsPerMinute` | `number` | `20` | Sliding window rate limit |
 
 ---
 
@@ -162,7 +178,23 @@ Reads the current Chrome tab as a semantic action map. No screenshots. Returns a
 
 ---
 
-### `weave_navigate`
+### `weave_wait` (New in V2)
+Smart deterministic wait system. Eliminates arbitrary sleep timeouts.
+**Conditions:** `navigation`, `element`, `network_idle`, `dom_stable`, `duration`
+**Returns:** `{ condition_met: true, waited_ms: 800 }`
+
+---
+
+### `weave_peek` (New in V2)
+Targeted 300x300 WebP crop for Canvas apps (Figma, Games) where the DOM provides no semantic information. Opt-in via `peek: true`.
+**Returns:** Base64 webp image + estimated token cost (usually ~40-80).
+
+---
+
+### `weave_find` (New in V2)
+Finds a semantic element by intent (e.g. `search bar`, `login button`) without needing an exact action map ID.
+
+---
 Navigates Chrome to a URL. Blocked in `safeMode` unless the domain is in `allow`.
 
 **Arguments:**

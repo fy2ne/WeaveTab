@@ -2,6 +2,8 @@ import CDP from "chrome-remote-interface";
 import { logAction } from "../audit/logger.js";
 import { memory } from "../state/memory.js";
 import type { Config } from "../config/loader.js";
+import { TelemetryCapture, TelemetryReport } from "../sensors/network.js";
+import { watchMutations, MutationSummary } from "../sensors/mutations.js";
 
 const ALLOWED_KEYS = new Set([
   "Enter", "Escape", "Tab", "Backspace", "Delete",
@@ -14,6 +16,9 @@ type Modifier = "Alt" | "Ctrl" | "Meta" | "Shift";
 
 interface KeyResult {
   success: true;
+  key: string;
+  telemetry: TelemetryReport;
+  mutations: MutationSummary;
 }
 
 export async function weaveKey(
@@ -36,6 +41,9 @@ export async function weaveKey(
 
   process.stderr.write(`⟳ Weaving: pressing ${key}\n`);
 
+  const telemetry = new TelemetryCapture(session);
+  await telemetry.start();
+
   await session.Input.dispatchKeyEvent({
     type: "keyDown",
     key: key,
@@ -56,6 +64,9 @@ export async function weaveKey(
     modifiers: modMask,
   });
 
+  const mutations = await watchMutations(session, 1000);
+  const telemetryReport = await telemetry.stop();
+
   logAction("weave_key", key, "dispatched");
   process.stderr.write(`✓ Weaved: key dispatched\n`);
 
@@ -67,5 +78,5 @@ export async function weaveKey(
     targetUrl: frameTree.frame.url
   });
 
-  return { success: true };
+  return { success: true, key, telemetry: telemetryReport, mutations };
 }
