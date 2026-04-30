@@ -1,6 +1,5 @@
 import CDP from "chrome-remote-interface";
 import { buildActionMap, ActionElement } from "../cdp/walker.js";
-import { logProfessional } from "../ui/cli.js";
 import { logAction } from "../audit/logger.js";
 import { getLastAction } from "../intelligence/trail.js";
 import { getProfile } from "../intelligence/profiles.js";
@@ -32,10 +31,9 @@ export async function weaveRead(
     limit: options.limit
   });
 
-  logProfessional("ACTION", "Weaver", `reading page ${map.url}${options.scope ? ` [${options.scope}]` : ""}`);
-  await (await import("../ui/cli.js")).logWeaving(`Analyzing DOM structure...`, 400);
-  logAction("weave_read", map.url, `${map.elements.length} elements`);
-  logProfessional("INFO", "Weaver", `✓ Weaved: ${map.elements.length} elements found`);
+  console.error(`[WeaveTab ${"Weaver".replace(/['"]/g,"")}] ${`reading page ${map.url}${options.scope ? ` [${options.scope}]` : ""}`}`);
+    logAction("weave_read", map.url, `${map.elements.length} elements`);
+  console.error(`[WeaveTab ${"Weaver".replace(/['"]/g,"")}] ${`✓ Weaved: ${map.elements.length} elements found`}`);
 
   let site = "generic";
   let pageType = "generic_webpage";

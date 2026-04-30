@@ -1,7 +1,6 @@
 import CDP from "chrome-remote-interface";
 import type { Config } from "../config/loader.js";
 import { blockStorageAccess } from "../security/guard.js";
-import { logProfessional } from "../ui/cli.js";
 import { launchWithBridge } from "./bridge.js";
 import { attachOverlayListener } from "../overlay/injector.js";
 
@@ -25,7 +24,7 @@ export async function getOrConnect(config: Config): Promise<BrowserClient> {
       await activeClient.session.Browser.getVersion();
       return activeClient;
     } catch {
-      logProfessional("WARN", "CDP", "Connection lost. Reconnecting...");
+      console.error(`[WeaveTab CDP] ${"Connection lost. Reconnecting..."}`);
       activeClient = null;
     }
   }
@@ -34,7 +33,7 @@ export async function getOrConnect(config: Config): Promise<BrowserClient> {
   try {
     targets = await CDP.List({ host: "127.0.0.1", port: 9222 });
   } catch {
-    logProfessional("INFO", "CDP", "Browser not found. Attempting to launch...");
+    console.error(`[WeaveTab CDP] ${"Browser not found. Attempting to launch..."}`);
     await launchBrowser(config);
     targets = await CDP.List({ host: "127.0.0.1", port: 9222 });
   }
@@ -62,7 +61,7 @@ export async function getOrConnect(config: Config): Promise<BrowserClient> {
   await blockStorageAccess(session);
   await attachOverlayListener(session);
 
-  logProfessional("INFO", "CDP", "✓ Weaved. Ready.");
+  console.error(`[WeaveTab CDP] ${"✓ Weaved. Ready."}`);
 
   activeClient = {
     session,

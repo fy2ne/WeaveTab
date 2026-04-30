@@ -1,5 +1,4 @@
 import CDP from "chrome-remote-interface";
-import { logProfessional } from "../ui/cli.js";
 
 /**
  * Automatically attempts to close common overlays, popups, and cookie banners.
@@ -33,7 +32,7 @@ export async function closePopups(session: CDP.Client): Promise<void> {
   });
 
   if (result.value) {
-    logProfessional("INFO", "Weaver", "✓ Weaved: Closed a popup/overlay.");
+    console.error(`[WeaveTab ${"Weaver".replace(/['"]/g,"")}] ${"✓ Weaved: Closed a popup/overlay."}`);
     await new Promise(r => setTimeout(r, 500)); // Wait for animation
   }
 }

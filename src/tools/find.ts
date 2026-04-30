@@ -5,9 +5,9 @@ import { ActionElement } from "../cdp/walker.js";
 
 export async function weaveFind(
   session: CDP.Client,
-  intent: string,
-  group?: string
+  args: { intent: string; group?: string }
 ) {
+  const { intent, group } = args;
   const readResultStr = await weaveRead(session);
   const data = JSON.parse(readResultStr);
   const elements: ActionElement[] = Object.values(data.elements).flat() as ActionElement[];

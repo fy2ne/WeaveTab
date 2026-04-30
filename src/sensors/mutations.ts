@@ -1,13 +1,19 @@
 import CDP from "chrome-remote-interface";
+import { Protocol } from "devtools-protocol";
 
 export type MutationSummary = {
-  newElements: { tag: string; text: string; role?: string }[];
-  removedElements: { tag: string; text: string }[];
-  attributeChanges: { element: string; attribute: string; oldValue: string; newValue: string }[];
+  newElements: { backendNodeId: number; tag: string; text: string; role?: string }[];
+  removedElements: { backendNodeId: number; tag: string; text: string }[];
+  attributeChanges: { backendNodeId: number; element: string; attribute: string; oldValue: string | null; newValue: string }[];
   significantChange: boolean;
 };
 
+// Heuristics for "significant" changes
+const SIGNIFICANT_TAGS = new Set(['button', 'a', 'input', 'textarea', 'select', 'h1', 'h2', 'h3', '[role="button"]', '[role="link"]']);
+const MAX_TEXT_LEN = 150;
+
 export async function watchMutations(session: CDP.Client, durationMs: number): Promise<MutationSummary> {
+  const { DOM } = session;
   const summary: MutationSummary = {
     newElements: [],
     removedElements: [],
@@ -15,53 +21,82 @@ export async function watchMutations(session: CDP.Client, durationMs: number): P
     significantChange: false,
   };
 
-  let mutationCount = 0;
-  
-  const insertListener = (params: any) => {
-    mutationCount++;
-    const nodeName = params.node?.nodeName?.toLowerCase();
-    if (nodeName && !['#text', '#comment', 'script', 'style'].includes(nodeName)) {
-      summary.newElements.push({
-        tag: nodeName,
-        text: params.node?.nodeValue || '',
-      });
+  let timeoutId: NodeJS.Timeout | null = null;
+  let documentUpdated = false;
+
+  const onDocumentUpdated = () => {
+    documentUpdated = true;
+    summary.significantChange = true; // Full page load is always significant
+  };
+
+  const onAttributeModified = (params: Protocol.DOM.AttributeModifiedEvent) => {
+    const { nodeId, name, value } = params;
+    // For simplicity, we can't get the old value here without more complex tracking.
+    // Let's just record the change.
+    summary.attributeChanges.push({
+      backendNodeId: nodeId,
+      element: `nodeId: ${nodeId}`,
+      attribute: name,
+      oldValue: "not_tracked", // The protocol doesn't provide the old value directly
+      newValue: value,
+    });
+    summary.significantChange = true; // Assume attribute changes can be significant
+  };
+
+  const onChildNodeInserted = async (params: Protocol.DOM.ChildNodeInsertedEvent) => {
+    const { parentNodeId, previousNodeId, node } = params;
+    // We only care about element nodes
+    if (node.nodeType !== 1) return; // 1 = Element Node
+
+    const textContent = node.nodeValue || ''; // Or might need to query for it
+    const role = node.attributes?.find(attr => attr.startsWith('role='))?.split('=')[1] ?? '';
+
+    summary.newElements.push({
+      backendNodeId: node.backendNodeId,
+      tag: node.localName,
+      text: textContent.substring(0, MAX_TEXT_LEN),
+      role,
+    });
+
+    if (SIGNIFICANT_TAGS.has(node.localName) || (role && SIGNIFICANT_TAGS.has(`[role="${role}"]`))) {
+      summary.significantChange = true;
     }
   };
 
-  const removeListener = (params: any) => {
-    mutationCount++;
+  const onChildNodeRemoved = (params: Protocol.DOM.ChildNodeRemovedEvent) => {
+    const { parentNodeId, nodeId } = params;
+    // We don't have info about the removed node other than its ID.
+    // A more complex implementation would cache node info.
     summary.removedElements.push({
-      tag: "unknown",
-      text: "Node removed" // Hard to get full details of removed node without caching DOM
+        backendNodeId: nodeId,
+        tag: 'unknown',
+        text: 'unknown'
     });
   };
 
-  const attrListener = (params: any) => {
-    mutationCount++;
-    summary.attributeChanges.push({
-      element: `nodeId:${params.nodeId}`,
-      attribute: params.name,
-      oldValue: "", // Can't easily get old value without caching
-      newValue: params.value
-    });
-  };
+  // --- Main Logic ---
+  const promise = new Promise<void>(resolve => {
+    timeoutId = setTimeout(resolve, durationMs);
+  });
 
-  session.DOM.on('childNodeInserted', insertListener);
-  session.DOM.on('childNodeRemoved', removeListener);
-  session.DOM.on('attributeModified', attrListener);
+  try {
+    // Enable DOM notifications
+    await DOM.enable();
+    const listeners = [
+        DOM.on("documentUpdated", onDocumentUpdated),
+        DOM.on("attributeModified", onAttributeModified),
+        DOM.on("childNodeInserted", onChildNodeInserted),
+        DOM.on("childNodeRemoved", onChildNodeRemoved)
+    ];
+    await DOM.getDocument({ depth: -1, pierce: true });
 
-  await new Promise(r => setTimeout(r, durationMs));
+    await promise;
 
-  (session.DOM as any).removeListener('childNodeInserted', insertListener);
-  (session.DOM as any).removeListener('childNodeRemoved', removeListener);
-  (session.DOM as any).removeListener('attributeModified', attrListener);
-
-  summary.significantChange = mutationCount > 3;
-
-  // Truncate to avoid blowing up tokens
-  if (summary.newElements.length > 10) summary.newElements = summary.newElements.slice(0, 10);
-  if (summary.removedElements.length > 5) summary.removedElements = summary.removedElements.slice(0, 5);
-  if (summary.attributeChanges.length > 5) summary.attributeChanges = summary.attributeChanges.slice(0, 5);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+    // Disabling the DOM agent automatically removes all listeners.
+    await DOM.disable();
+  }
 
   return summary;
 }

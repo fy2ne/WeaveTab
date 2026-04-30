@@ -5,14 +5,11 @@ import { logAction } from "../audit/logger.js";
 import { recordAction } from "../intelligence/trail.js";
 import { getProfile } from "../intelligence/profiles.js";
 import type { Config } from "../config/loader.js";
-import { logProfessional } from "../ui/cli.js";
-import { TelemetryCapture, TelemetryReport } from "../sensors/network.js";
 import { watchMutations, MutationSummary } from "../sensors/mutations.js";
 
 interface ClickResult {
   success: true;
   clicked: string;
-  telemetry: TelemetryReport;
   mutations: MutationSummary;
 }
 
@@ -22,7 +19,8 @@ export async function weaveClick(
   config: Config
 ): Promise<ClickResult> {
   const { id, label, intent, backendNodeId } = args;
-  const { frameTree: beforeTree } = await session.Page.getFrameTree();
+  const { Page, DOM, Input, Runtime } = session;
+  const { frameTree: beforeTree } = await Page.getFrameTree();
   const urlBefore = beforeTree.frame.url;
   const pageTypeBefore = getPageType(urlBefore);
 
@@ -32,15 +30,14 @@ export async function weaveClick(
   }
 
   let element: any;
+  const map = await buildActionMap(session);
 
   if (backendNodeId) {
-    element = { backendNodeId, label: `node-${backendNodeId}`, id: `node-${backendNodeId}` };
+    element = map.elements.find((el) => el.backendNodeId === backendNodeId) || { backendNodeId, label: `node-${backendNodeId}`, id: `node-${backendNodeId}` };
   } else if (id) {
-    const map = await buildActionMap(session);
     element = map.elements.find((el) => el.id === id);
     if (!element) throw new Error(`⊘ Weave blocked: ID "${id}" not found`);
   } else if (label || intent) {
-    const map = await buildActionMap(session);
     const target = label || intent!;
     element = map.elements.find(el => el.label.toLowerCase() === target.toLowerCase()) 
               || map.elements.find(el => el.type === target)
@@ -51,18 +48,14 @@ export async function weaveClick(
     throw new Error("✗ Weave failed: Must provide elementId, label, intent, or backendNodeId");
   }
 
-  logProfessional("ACTION", "Weaver", `clicking ${element.label}`);
-  await (await import("../ui/cli.js")).logWeaving(`Moving mouse to ${element.label}...`, 400);
-
-  const telemetry = new TelemetryCapture(session);
-  await telemetry.start();
-
+  console.error(`[WeaveTab ${"Weaver".replace(/['"]/g,"")}] ${`clicking ${element.label}`}`);
+  
   if (!element.backendNodeId) {
     throw new Error(`✗ Weave failed: Element "${element.id}" has no backend node ID`);
   }
 
-  await session.DOM.getDocument({});
-  const { nodeIds } = await session.DOM.pushNodesByBackendIdsToFrontend({ backendNodeIds: [element.backendNodeId] });
+  await DOM.getDocument({});
+  const { nodeIds } = await DOM.pushNodesByBackendIdsToFrontend({ backendNodeIds: [element.backendNodeId] });
   if (!nodeIds || nodeIds.length === 0) {
      throw new Error(`✗ Weave failed: Could not resolve DOM node for "${element.id}"`);
   }
@@ -70,51 +63,51 @@ export async function weaveClick(
 
   let boxModel;
   try {
-    boxModel = (await session.DOM.getBoxModel({ nodeId })).model;
+    boxModel = (await DOM.getBoxModel({ nodeId })).model;
   } catch {
-    const { object } = await session.DOM.resolveNode({ nodeId });
-    await session.Runtime.callFunctionOn({
+    const { object } = await DOM.resolveNode({ nodeId });
+    await Runtime.callFunctionOn({
       functionDeclaration: `function() { this.scrollIntoView({behavior: 'instant', block: 'center'}); }`,
       objectId: object.objectId,
       silent: true,
     });
-    boxModel = (await session.DOM.getBoxModel({ nodeId })).model;
+    boxModel = (await DOM.getBoxModel({ nodeId })).model;
   }
 
   const quad = boxModel.content;
   const x = quad[0]! + (quad[2]! - quad[0]!) / 2;
   const y = quad[1]! + (quad[5]! - quad[1]!) / 2;
 
-  await session.Runtime.evaluate({
+  await Runtime.evaluate({
     expression: `if(window.__weavetab) window.__weavetab.moveCursor(${x}, ${y}, 'Clicking ${element.label.replace(/'/g, "\\'")}');`
   });
 
   await new Promise(r => setTimeout(r, 300));
-  await session.Input.dispatchMouseEvent({ type: "mouseMoved", x, y, button: "none" });
-  await (await import("../ui/cli.js")).logWeaving(`Clicking ${element.label}...`, 200);
-  
-  await session.Runtime.evaluate({
+  await Input.dispatchMouseEvent({ type: "mouseMoved", x, y, button: "none" });
+    
+  await Runtime.evaluate({
     expression: `if(window.__weavetab) window.__weavetab.clickCursor();`
   });
   
-  await session.Input.dispatchMouseEvent({ type: "mousePressed", x, y, button: "left", clickCount: 1 });
-  await session.Input.dispatchMouseEvent({ type: "mouseReleased", x, y, button: "left", clickCount: 1 });
-
-  await session.Runtime.evaluate({
+  // V2: Watch for mutations after the click
+  const [_, mutations] = await Promise.all([
+    Input.dispatchMouseEvent({ type: "mousePressed", x, y, button: "left", clickCount: 1 }).then(() => 
+    Input.dispatchMouseEvent({ type: "mouseReleased", x, y, button: "left", clickCount: 1 })),
+    watchMutations(session, 800) // Watch for 800ms post-click
+  ]);
+  
+  await Runtime.evaluate({
     expression: `if(window.__weavetab) window.__weavetab.hideBadge();`
   });
-
-  const mutations = await watchMutations(session, 1000);
-  const telemetryReport = await telemetry.stop();
   
-  const { frameTree: afterTree } = await session.Page.getFrameTree();
+  const { frameTree: afterTree } = await Page.getFrameTree();
   const urlAfter = afterTree.frame.url;
   const pageTypeAfter = getPageType(urlAfter);
 
   recordAction({
     timestamp: new Date().toISOString(),
     tool: "weave_click",
-    input: { elementId: element.id },
+    input: { elementId: element.id, label: element.label, intent: element.type },
     result: {
       success: true,
       pageChanged: urlBefore !== urlAfter,
@@ -127,13 +120,14 @@ export async function weaveClick(
         type: element.type || "unknown",
         label: element.label,
         href: element.href
-      }
+      },
+      mutations, // V2: Include mutation summary in the trail
     }
   });
 
-  logProfessional("INFO", "Weaver", `✓ Weaved: clicked ${element.label}`);
+  console.error(`[WeaveTab ${"Weaver".replace(/['"]/g,"")}] ${`✓ Weaved: clicked ${element.label}, significant change: ${mutations.significantChange}`}`);
 
-  return { success: true, clicked: element.label, telemetry: telemetryReport, mutations };
+  return { success: true, clicked: element.label, mutations };
 }
 
 function getPageType(url: string): string {

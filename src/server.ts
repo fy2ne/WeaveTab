@@ -17,10 +17,7 @@ import { weaveKey } from "./tools/key.js";
 import { weaveFind } from "./tools/find.js";
 import { weave_peek } from "./tools/peek.js";
 import { weave_wait } from "./sensors/wait.js";
-import { youtubeDemo } from "./tools/youtube_demo.js";
-import { logProfessional } from "./ui/cli.js";
 
-import { startDashboardServer } from "./dashboard/server.js";
 
 type ToolHandler<T> = (session: any, config: Config) => Promise<T>;
 
@@ -41,7 +38,7 @@ async function withSecurity<T>(config: Config, toolName: string, handler: ToolHa
 }
 
 function isMutatingTool(name: string): boolean {
-  return ["weave_navigate", "weave_click", "weave_type", "weave_scroll", "weave_key", "weave_youtube_demo", "weave_wait"].includes(name);
+  return ["weave_navigate", "weave_click", "weave_type", "weave_scroll", "weave_key", "weave_wait"].includes(name);
 }
 
 function assertSafeModeAllows(toolName: string, config: Config): void {
@@ -82,7 +79,7 @@ export async function startServer(config: Config): Promise<void> {
     },
     async (args) => {
       try {
-        logProfessional("ACTION", "Server", `weave_read called: ${JSON.stringify(args)}`);
+        console.error(`[WeaveTab Server] ${`weave_read called: ${JSON.stringify(args)}`}`);
         return await withSecurity(config, "weave_read", async (session, liveConfig) => {
           const result = await weaveRead(session, args);
           return { content: [{ type: "text", text: result }] };
@@ -99,7 +96,7 @@ export async function startServer(config: Config): Promise<void> {
     { url: z.string().describe("Full URL to navigate to") },
     async ({ url }) => {
       try {
-        logProfessional("ACTION", "Server", `weave_navigate: ${url}`);
+        console.error(`[WeaveTab Server] ${`weave_navigate: ${url}`}`);
         return await withSecurity(config, "weave_navigate", async (session, liveConfig) => {
           const result = await weaveNavigate(session, url, liveConfig);
           return { content: [{ type: "text", text: JSON.stringify(result) }] };
@@ -121,7 +118,7 @@ export async function startServer(config: Config): Promise<void> {
     },
     async (args) => {
       try {
-        logProfessional("ACTION", "Server", `weave_click: ${args.label || args.id || args.intent}`);
+        console.error(`[WeaveTab Server] ${`weave_click: ${args.label || args.id || args.intent}`}`);
         return await withSecurity(config, "weave_click", async (session, liveConfig) => {
           const result = await weaveClick(session, args, liveConfig);
           return { content: [{ type: "text", text: JSON.stringify(result) }] };
@@ -145,7 +142,7 @@ export async function startServer(config: Config): Promise<void> {
     },
     async (args) => {
       try {
-        logProfessional("ACTION", "Server", `weave_type: ${args.text.substring(0, 10)}... into ${args.label || args.id || args.intent}`);
+        console.error(`[WeaveTab Server] ${`weave_type: ${args.text.substring(0, 10)}... into ${args.label || args.id || args.intent}`}`);
         return await withSecurity(config, "weave_type", async (session, liveConfig) => {
           const result = await weaveType(session, args, liveConfig);
           return { content: [{ type: "text", text: JSON.stringify(result) }] };
@@ -165,9 +162,9 @@ export async function startServer(config: Config): Promise<void> {
     },
     async ({ key, modifiers }) => {
       try {
-        logProfessional("ACTION", "Server", `weave_key: ${key}${modifiers ? ` + ${modifiers.join("+")}` : ""}`);
+        console.error(`[WeaveTab Server] ${`weave_key: ${key}${modifiers ? ` + ${modifiers.join("+")}` : ""}`}`);
         return await withSecurity(config, "weave_key", async (session, liveConfig) => {
-          const result = await weaveKey(session, key, modifiers, liveConfig);
+          const result = await weaveKey(session, { key, modifiers }, liveConfig);
           return { content: [{ type: "text", text: JSON.stringify(result) }] };
         });
       } catch (e) {
@@ -186,7 +183,7 @@ export async function startServer(config: Config): Promise<void> {
     async ({ intent, group }) => {
       try {
         return await withSecurity(config, "weave_find", async (session) => {
-          const result = await weaveFind(session, intent, group);
+          const result = await weaveFind(session, { intent, group });
           return { content: [{ type: "text", text: JSON.stringify(result) }] };
         });
       } catch (e) {
@@ -255,7 +252,7 @@ export async function startServer(config: Config): Promise<void> {
     },
     async ({ direction, amount }) => {
       try {
-        logProfessional("ACTION", "Server", `weave_scroll: ${direction} ${amount || 500}px`);
+        console.error(`[WeaveTab Server] ${`weave_scroll: ${direction} ${amount || 500}px`}`);
         return await withSecurity(config, "weave_scroll", async (session, liveConfig) => {
           const result = await weaveScroll(session, direction, amount ?? 500, liveConfig);
           return { content: [{ type: "text", text: JSON.stringify(result) }] };
@@ -278,7 +275,7 @@ export async function startServer(config: Config): Promise<void> {
     },
     async (args) => {
       try {
-        logProfessional("ACTION", "Server", `weave_wait: ${args.condition}`);
+        console.error(`[WeaveTab Server] ${`weave_wait: ${args.condition}`}`);
         return await withSecurity(config, "weave_wait", async (session, liveConfig) => {
           const result = await weave_wait(session, args);
           return { content: [{ type: "text", text: JSON.stringify(result) }] };
@@ -301,7 +298,7 @@ export async function startServer(config: Config): Promise<void> {
     },
     async (args) => {
       try {
-        logProfessional("ACTION", "Server", `weave_peek: ${args.x}, ${args.y}`);
+        console.error(`[WeaveTab Server] ${`weave_peek: ${args.x}, ${args.y}`}`);
         return await withSecurity(config, "weave_peek", async (session, liveConfig) => {
           const result = await weave_peek(session, args, liveConfig);
           return { content: [{ type: "text", text: JSON.stringify(result) }] };
@@ -314,7 +311,7 @@ export async function startServer(config: Config): Promise<void> {
 
   server.tool("weave_screenshot", "Capture a PNG screenshot of the current tab.", {}, async () => {
     try {
-      logProfessional("ACTION", "Server", "weave_screenshot called");
+      console.error(`[WeaveTab Server] ${"weave_screenshot called"}`);
       return await withSecurity(config, "weave_screenshot", async (session, liveConfig) => {
         const result = await weaveScreenshot(session, liveConfig);
         return {
@@ -332,21 +329,7 @@ export async function startServer(config: Config): Promise<void> {
     }
   });
 
-  server.tool("weave_youtube_demo", "Run a full YouTube MrBeast search and quality setting demo.", {}, async () => {
-    try {
-      return await withSecurity(config, "weave_youtube_demo", async (session, liveConfig) => {
-        const result = await youtubeDemo(session, liveConfig);
-        return { content: [{ type: "text", text: JSON.stringify(result) }] };
-      });
-    } catch (e) {
-      return wrapError(e);
-    }
-  });
-
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  logProfessional("INFO", "Main", "✓ WeaveTab Server Ready. Waiting for AI commands...");
-
-  // Start the dashboard silently
-  startDashboardServer().catch(() => {});
+  console.error(`[WeaveTab Main] ${"✓ WeaveTab Server Ready. Waiting for AI commands..."}`);
 }

@@ -24,8 +24,8 @@ const DEFAULTS: Config = {
   screenshot: false,
   maxActionsPerMinute: 20,
   browserExecutablePath: "",
-  preferredBrowser: "google-chrome",
-  persistentProfile: false,
+  preferredBrowser: "msedge",
+  persistentProfile: true,
 };
 
 function ensureConfigDir(): void {

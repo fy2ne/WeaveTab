@@ -1,3 +1,5 @@
+import { MutationSummary } from "../sensors/mutations.js";
+
 export type SemanticType = string;
 
 export type TrailEntry = {
@@ -6,17 +8,18 @@ export type TrailEntry = {
   input: Record<string, unknown>;
   result: {
     success: boolean;
-    pageChanged: boolean;
-    urlBefore: string;
-    urlAfter: string;
-    pageTypeBefore: string;
-    pageTypeAfter: string;
+    pageChanged?: boolean;
+    urlBefore?: string;
+    urlAfter?: string;
+    pageTypeBefore?: string;
+    pageTypeAfter?: string;
     elementClicked?: {
       id: string;
       type: SemanticType;
       label: string;
       href?: string;
     };
+    mutations?: MutationSummary;
   };
 };
 

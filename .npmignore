@@ -1,0 +1,8 @@
+.opencode/
+.agents/
+tests/
+*.md
+!README.md
+*.ts
+!*.d.ts
+tsconfig.json
