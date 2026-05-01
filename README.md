@@ -1,12 +1,12 @@
 <div align="center">
 
-# WeaveTab V2
+# WeaveTab MCP V2
 
 **The Zero-Setup Local Browser MCP for AI Agents**
 
 [![npm version](https://badge.fury.io/js/%40fy2ne%2Fweavetab.svg)](https://badge.fury.io/js/%40fy2ne%2Fweavetab)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-
+[![Socket Badge](https://badge.socket.dev/npm/package/@fy2ne/weavetab/2.0.1)](https://badge.socket.dev/npm/package/@fy2ne/weavetab/2.0.1)
 <br />
 
 <img src="https://github.com/user-attachments/assets/afc74063-beb3-4b6e-95b5-f7cc78abbdf2" width="80%" alt="WeaveTab V2 Architecture" />
