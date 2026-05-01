@@ -9,7 +9,7 @@
 
 </div>
 
-<img width="1279" height="592" alt="image" src="https://github.com/user-attachments/assets/1ce8e5ee-9e14-4f36-88f3-519ea4d5faab" />
+<img width="679" height="468" alt="image" src="https://github.com/user-attachments/assets/afc74063-beb3-4b6e-95b5-f7cc78abbdf2" />
 
 
 WeaveTab is a lightweight, local Model Context Protocol (MCP) server that empowers AI agents to seamlessly interact with web browsers using Chrome DevTools Protocol (CDP). 
