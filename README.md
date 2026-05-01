@@ -7,13 +7,15 @@
 [![npm version](https://badge.fury.io/js/%40fy2ne%2Fweavetab.svg)](https://badge.fury.io/js/%40fy2ne%2Fweavetab)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
+<br />
+
+<img src="https://github.com/user-attachments/assets/afc74063-beb3-4b6e-95b5-f7cc78abbdf2" width="80%" alt="WeaveTab V2 Architecture" />
+
+<br />
+
+WeaveTab is a lightweight, local Model Context Protocol (MCP) server that empowers AI agents to seamlessly interact with web browsers using Chrome DevTools Protocol (CDP).
+
 </div>
-
-<img width="679" height="468" alt="image" src="https://github.com/user-attachments/assets/afc74063-beb3-4b6e-95b5-f7cc78abbdf2" />
-
-
-WeaveTab is a lightweight, local Model Context Protocol (MCP) server that empowers AI agents to seamlessly interact with web browsers using Chrome DevTools Protocol (CDP). 
-
 Unlike other solutions, WeaveTab is completely **autonomous and zero-setup**. It automatically launches a sandboxed browser profile parallel to your daily browsing—meaning you **never have to close your browser or mess with debugging ports again.**
 
 ## 🌟 Key Features
