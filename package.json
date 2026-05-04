@@ -10,7 +10,7 @@
     "weavetab": "dist/index.js"
   },
   "publishConfig": {
-    "access": "restricted"
+    "access": "public"
   },
   "files": [
     "dist",
